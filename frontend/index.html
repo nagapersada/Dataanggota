@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MLM Dashboard v10</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Inter", sans-serif;
+      background: #0b1220;
+      color: #e6eefc;
+      overflow: hidden;
+    }
+    header {
+      background: #111827;
+      padding: 14px 20px;
+      font-weight: 600;
+      font-size: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .btn {
+      background: #2563eb;
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn:hover { background: #1d4ed8; }
+
+    #loginSection, #mainSection { padding: 20px; }
+
+    input {
+      width: 100%;
+      padding: 8px;
+      margin: 4px 0;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #e6eefc;
+    }
+    form {
+      background: #111827;
+      padding: 16px;
+      border-radius: 10px;
+      max-width: 400px;
+      margin-bottom: 20px;
+    }
+    #networkContainer {
+      width: 100%;
+      height: 500px;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      position: relative;
+      overflow: hidden;
+      touch-action: none;
+    }
+    #networkGraph {
+      width: 2000px;   /* area besar agar bisa digeser */
+      height: 1500px;
+      display: block;
+      background: #0f172a;
+    }
+    .link {
+      fill: none;
+      stroke: #334155;
+      stroke-width: 1.5px;
+    }
+    .node circle {
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .node circle:hover {
+      stroke: #60a5fa;
+      stroke-width: 3px;
+    }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@9.4.0/dist/panzoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    MLM Dashboard v10
+    <button id="logoutBtn" class="btn" style="display:none;background:#dc2626;">Keluar</button>
+  </header>
+
+  <section id="loginSection">
+    <h3>Login</h3>
+    <input id="loginEmail" type="email" placeholder="Email admin" />
+    <input id="loginPassword" type="password" placeholder="Password" />
+    <button id="loginBtn" class="btn">Masuk</button>
+  </section>
+
+  <section id="mainSection" style="display:none;">
+    <h3>Tambah / Edit Anggota</h3>
+    <form id="memberForm">
+      <input type="hidden" id="editId">
+      <label>Nama:</label>
+      <input id="nama" required />
+      <label>No. UID:</label>
+      <input id="uid" required />
+      <label>Nama Referral:</label>
+      <input id="referralNama" />
+      <label>No. UID Referral:</label>
+      <input id="referralUid" />
+      <label>Tanggal Bergabung:</label>
+      <input id="tglGabung" type="date" />
+      <button type="submit" class="btn">Simpan</button>
+    </form>
+
+    <h3>Daftar Anggota</h3>
+    <div id="memberList"></div>
+
+    <h3>Struktur Jaringan Anggota</h3>
+    <div id="networkContainer">
+      <svg id="networkGraph" viewBox="0 0 2000 1500" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
