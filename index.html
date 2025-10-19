@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLM Dashboard v8</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Inter", sans-serif;
+      background: #0b1220;
+      color: #e6eefc;
+      overflow-x: hidden;
+    }
+    header {
+      background: #111827;
+      padding: 14px 20px;
+      font-weight: 600;
+      font-size: 18px;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .btn {
+      background: #2563eb;
+      border: none;
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn:hover { background: #1d4ed8; }
+
+    #loginSection, #mainSection {
+      padding: 20px;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #e6eefc;
+    }
+    form {
+      background: #111827;
+      padding: 16px;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+      max-width: 400px;
+      margin-bottom: 20px;
+    }
+    label { font-size: 14px; color: #cbd5e1; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #111827;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #1e293b;
+      text-align: left;
+      font-size: 14px;
+    }
+    th { background: #1e293b; color: #cbd5e1; }
+    tr:hover { background: rgba(255,255,255,0.05); }
+
+    /* --- INI CSS PENTING UNTUK KARTU JARINGAN --- */
+    #networkContainer {
+      width: 100%;
+      height: 500px; /* Ini adalah 'jendela' kartu Anda */
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      overflow: hidden; /* Grafik tidak akan keluar dari kartu */
+      position: relative;
+      touch-action: none; /* Penting agar HP mengizinkan JS ambil alih zoom/pan */
+    }
+
+    #networkGraph {
+      display: block; 
+      /* Hapus semua 'width', 'height', 'min-width', dll. */
+      /* JS akan mengontrol ukurannya lewat 'viewBox' */
+    }
+    /* --- AKHIR CSS PENTING --- */
+
+    .link {
+      fill: none;
+      stroke: #334155;
+      stroke-width: 1.5px;
+    }
+
+    .node circle {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .node circle:hover {
+      stroke: #60a5fa;
+      stroke-width: 3px;
+    }
+
+    .label {
+      font-size: 12px;
+      user-select: none;
+    }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@9.4.0/dist/panzoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    MLM Dashboard v8
+    <button id="logoutBtn" class="btn" style="display:none;background:#dc2626;">Keluar</button>
+  </header>
+
+  <section id="loginSection">
+    <h3>Masuk</h3>
+    <input id="loginEmail" type="email" placeholder="Email"><br><br>
+    <input id="loginPassword" type="password" placeholder="Password"><br><br>
+    <button id="loginBtn" class="btn">Login</button>
+  </section>
+
+  <section id="mainSection" style="display:none;">
+    <h3>Tambah / Edit Anggota</h3>
+    <form id="memberForm">
+      <input type="hidden" id="editId">
+      <label>Nama:</label>
+      <input id="nama" required><br><br>
+      <label>No. UID:</label>
+      <input id="uid" required><br><br>
+      <label>Nama Referral:</label>
+      <input id="referralNama"><br><br>
+      <label>No. UID Referral:</label>
+      <input id="referralUid"><br><br>
+      <label>Tanggal Bergabung:</label>
+      <input id="tglGabung" type="date"><br><br>
+      <button type="submit" class="btn">Simpan</button>
+      <button type="reset" class="btn" style="background:#475569;">Reset</button>
+    </form>
+
+    <h3>Daftar Anggota</h3>
+    <div id="memberList"></div>
+
+    <h3>Pertumbuhan Anggota /15 hari</h3>
+    <div style="width:100%;height:300px;">
+      <canvas id="growthChart"></canvas>
+    </div>
+
+    <h3>Struktur Jaringan Anggota</h3>
+    <div id="networkContainer">
+      <svg id="networkGraph"></svg>
+    </div>
+  </section>
+
+  <script>
+    // app.js - MLM Dashboard v8 (UI fixed for scroll & zoom)
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC4Ef9A9aHgYT_2OeecPWv_P-5kpRgYH1E",
+      authDomain: "mlm-network-47720.firebaseapp.com",
+      databaseURL: "https://mlm-network-47720-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "mlm-network-47720",
+      storageBucket: "mlm-network-47720.firebasestorage.app",
+      messagingSenderId: "988431073923",
+      appId: "1:988431073923:web:23a0c98c300e2b2058d1b6"
+    };
+    firebase.initializeApp(firebaseConfig);
+
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    const loginSection = document.getElementById("loginSection");
+    const mainSection = document.getElementById("mainSection");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const loginBtn = document.getElementById("loginBtn");
+
+    const q = id => document.getElementById(id);
+    let members = [];
+
+    loginBtn.onclick = async () => {
+      const email = q("loginEmail").value.trim();
+      const pw = q("loginPassword").value.trim();
+      if (!email || !pw) return alert("Isi email dan password!");
+      try {
+        await auth.signInWithEmailAndPassword(email, pw);
+      } catch (e) { alert("Login gagal: " + e.message); }
+    };
+
+    logoutBtn.onclick = async () => { await auth.signOut(); };
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        loginSection.style.display = "none";
+        mainSection.style.display = "block";
+        logoutBtn.style.display = "inline-block";
+        loadMembers();
+      } else {
+        mainSection.style.display = "none";
+        loginSection.style.display = "block";
+        logoutBtn.style.display = "none";
+      }
+    });
+
+    function loadMembers() {
+      db.ref("members").on("value", snap => {
+        const data = snap.val() || {};
+        members = Object.keys(data).map(id => ({ id, ...data[id] }));
+        renderMembers();
+        renderGrowth();
+        renderNetwork();
+      });
+    }
+
+    q("memberForm").onsubmit = e => {
+      e.preventDefault();
+      const id = q("editId").value;
+      const data = {
+        nama: q("nama").value.trim(),
+        uid: q("uid").value.trim(),
+        referralNama: q("referralNama").value.trim(),
+        referralUid: q("referralUid").value.trim(),
+        tglGabung: q("tglGabung").value
+      };
+      if (!data.nama || !data.uid) return alert("Nama dan UID wajib!");
+      if (id) db.ref("members/" + id).set(data);
+      else db.ref("members").push(data);
+      e.target.reset();
+      q("editId").value = "";
+    };
+
+    function renderMembers() {
+      const list = q("memberList");
+      list.innerHTML = "";
+      members.forEach(m => {
+        const div = document.createElement("div");
+        div.style = "background:#1e293b;margin:6px 0;padding:10px;border-radius:6px;";
+        div.innerHTML = `
+          <b>${m.nama}</b> (${m.uid})<br>
+          Referral: ${m.referralNama || "-"} (${m.referralUid || "-"})<br>
+          Tgl: ${m.tglGabung || "-"}<br>
+          <button onclick="editMember('${m.id}')">✏️</button>
+          <button onclick="deleteMember('${m.id}')">🗑️</button>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function editMember(id) {
+      const m = members.find(x => x.id === id);
+      if (!m) return;
+      q("editId").value = m.id;
+      q("nama").value = m.nama;
+      q("uid").value = m.uid;
+      q("referralNama").value = m.referralNama;
+      q("referralUid").value = m.referralUid;
+      q("tglGabung").value = m.tglGabung;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function deleteMember(id) {
+      if (confirm("Hapus anggota ini?")) db.ref("members/" + id).remove();
+    }
+
+    // ----------------- Growth Chart (TETAP SAMA, TIDAK DIUBAH) -----------------
+    let chart;
+    function renderGrowth() {
+      const ctx = q("growthChart").getContext("2d");
+      if (chart) chart.destroy();
+      const dates = members.map(m => new Date(m.tglGabung));
+      if (!dates.length) return;
+      const min = new Date(Math.min(...dates));
+      const max = new Date(Math.max(...dates));
+      const labels = [], values = [];
+      for (let d = new Date(min); d <= max; d.setDate(d.getDate() + 15)) {
+        const end = new Date(d); end.setDate(end.getDate() + 15);
+        const c = members.filter(m => {
+          const t = new Date(m.tglGabung);
+          return t >= d && t < end;
+        }).length;
+        labels.push(d.toISOString().slice(0,10));
+        values.push(c);
+      }
+      chart = new Chart(ctx, {
+        type: "bar",
+        data: { labels, datasets: [{ data: values, backgroundColor: "#2563eb" }] },
+        options: { plugins:{legend:{display:false}}, scales:{x:{ticks:{color:"#9ca3af"}},y:{ticks:{color:"#9ca3af"}}} }
+      });
+    }
+
+    // ----------------- INI KODE PERBAIKAN UNTUK KARTU JARINGAN -----------------
+    function renderNetwork() {
+      // 1. Target HANYA <svg id="networkGraph">
+      const svg = d3.select("#networkGraph");
+      svg.selectAll("*").remove();
+      
+      // 'g' adalah grup di DALAM svg yang akan digeser-geser
+      const g = svg.append("g").attr("id", "mainGroup"); 
+
+      // 2. Buat data pohon (TIDAK ADA PERUBAHAN FUNGSI)
+      const uidMap = {};
+      members.forEach(m => uidMap[m.uid] = { ...m, children: [] });
+      const roots = []; 
+      members.forEach(m => {
+        if (m.referralUid && uidMap[m.referralUid])
+          uidMap[m.referralUid].children.push(uidMap[m.uid]);
+        else roots.push(uidMap[m.uid]);
+      });
+      const treeData = { nama: "ROOT", children: roots }; 
+      const root = d3.hierarchy(treeData);
+      const treeLayout = d3.tree().nodeSize([80, 200]);
+      treeLayout(root);
+      
+      // 3. Atur ukuran 'viewBox' SVG agar bisa di-zoom
+      const xExtent = d3.extent(root.descendants(), d => d.x); 
+      const yExtent = d3.extent(root.descendants(), d => d.y);
+      const width = yExtent[1] - yExtent[0] + 400; 
+      const height = xExtent[1] - xExtent[0] + 400;
+      // Ini bagian penting: membuat 'kamera' virtual untuk SVG
+      svg.attr("viewBox", [yExtent[0] - 200, xExtent[0] - 200, width, height]); 
+
+      // 4. Render pohon (TIDAK ADA PERUBAHAN FUNGSI)
+      const link = d3.linkHorizontal().x(d => d.y).y(d => d.x);
+      g.selectAll(".link") 
+        .data(root.links())
+        .enter().append("path")
+        .attr("class", "link")
+        .attr("d", link)
+        .attr("stroke", "#334155")
+        .attr("stroke-width", 1.5)
+        .attr("fill", "none");
+      const node = g.selectAll(".node") 
+        .data(root.descendants())
+        .enter().append("g")
+        .attr("class", "node")
+        .attr("transform", d => `translate(${d.y},${d.x})`)
+        .on("click", (_, d) => { toggle(d); update(); });
+      node.append("circle") 
+        .attr("r", 18)
+        .attr("fill", d => d._children ? "#1d4ed8" : "#2563eb");
+      node.append("text") 
+        .attr("x", 26)
+        .attr("y", 4)
+        .attr("fill", "#e6eefc")
+        .text(d => d.data.nama);
+      
+      // 5. INI BAGIAN ZOOM/PAN YANG DIPERBAIKI
+      const svgNode = svg.node();
+      // Baris ini krusial untuk HP.
+      svgNode.style.touchAction = "none"; 
+
+      // Targetkan Panzoom HANYA ke 'svgNode' (grafik Anda)
+      const panzoom = Panzoom(svgNode, { 
+        contain: 'outside',
+        maxScale: 3,
+        minScale: 0.3,
+        step: 0.2,
+        startScale: 0.6,
+        // Perintah ini memberi tahu Panzoom untuk menggerakkan grup 'g'
+        setTransform: (el, { scale, x, y }) => {
+          g.attr("transform", `translate(${x},${y}) scale(${scale})`);
+        }
+      });
+      
+      // Tambahkan listener HANYA ke 'svgNode'
+      svgNode.addEventListener('wheel', panzoom.zoomWithWheel, { passive: false }); 
+      svgNode.addEventListener('pointerdown', panzoom.handleDown); 
+      svgNode.addEventListener('pointermove', panzoom.handleMove); 
+      svgNode.addEventListener('pointerup', panzoom.handleUp); 
+      svgNode.addEventListener('pointercancel', panzoom.handleUp); 
+      svgNode.addEventListener('pointerleave', panzoom.handleUp); 
+      
+      // Atur posisi & zoom awal
+      panzoom.pan(width / -4, height / -4); 
+      panzoom.zoom(0.6);
+
+      // 6. Fungsi toggle & update (TIDAK ADA PERUBAHAN FUNGSI)
+      function toggle(d) {
+        if (d.children) { d._children = d.children;
+          d.children = null; } 
+        else { d.children = d._children; d._children = null; 
+        }
+      }
+      function update() {
+        g.selectAll("*").remove();
+        treeLayout(root);
+        g.selectAll(".link") 
+          .data(root.links())
+          .enter().append("path")
+          .attr("class", "link")
+          .attr("d", link)
+          .attr("stroke", "#334155")
+          .attr("stroke-width", 1.5)
+          .attr("fill", "none");
+        const n = g.selectAll(".node") 
+          .data(root.descendants())
+          .enter().append("g")
+          .attr("class", "node")
+          .attr("transform", d => `translate(${d.y},${d.x})`)
+          .on("click", (_, d) => { toggle(d); update(); });
+        n.append("circle").attr("r", 18).attr("fill", d => d._children ? "#1d4ed8" : "#2563eb"); 
+        n.append("text").attr("x", 26).attr("y", 4).attr("fill", "#e6eefc").text(d => d.data.nama); 
+      }
+    }
+  </script>
+
+</body>
+</html>
